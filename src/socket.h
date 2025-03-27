@@ -9,16 +9,17 @@
 #include <string>
 
 class Socket {
-public:
-    explicit Socket(int port);
-    ~Socket();
-    void listen(int backlog = 5);
-    int acceptConnection();
-    int getFd() const { return listenFd; }
-    static void setNonBlocking(int fd);
-
-private:
-    int listenFd;       // 监听 socket fd
-    sockaddr_in addr;   // 服务器地址信息
-};
+    public:
+        Socket();
+        ~Socket();
+    
+        bool createSocket(int port);    // 创建监听 socket
+        void setNonBlocking(int fd);    // 设置非阻塞
+        int acceptConnection();         // 接受新连接
+        void closeSocket();             // 关闭 socket
+        int getListenFd() const { return listenFd; }
+    
+    private:
+        int listenFd;
+    };
 

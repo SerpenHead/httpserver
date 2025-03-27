@@ -1,54 +1,59 @@
 #include "epoll.h"
+#include <sys/epoll.h>
+#include <unistd.h>
+#include <iostream>
 
+EpollWrapper::EpollWrapper() : epollFd(-1) {}
 
-// 构造函数：创建 epoll 实例
-Epoll::Epoll(int maxEvents) : events(maxEvents) {
-    epollFd = epoll_create1(0);
+EpollWrapper::~EpollWrapper() {
+    if (epollFd != -1) {
+        close(epollFd);
+    }
+}
+
+// 初始化 epoll
+bool EpollWrapper::init(int maxEvents) {
+    epollFd = epoll_create(1);
     if (epollFd == -1) {
-        throw std::runtime_error("Failed to create epoll instance");
+        std::cerr << "Failed to create epoll.\n";
+        return false;
     }
+    events.resize(maxEvents);
+    return true;
 }
 
-// 析构函数：关闭 epoll fd
-Epoll::~Epoll() {
-    close(epollFd);
+// 添加事件
+bool EpollWrapper::addFd(int fd, bool enableET) {
+    struct epoll_event ev{};
+    ev.data.fd = fd;
+    ev.events = EPOLLIN | (enableET ? EPOLLET : 0);
+    return epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &ev) != -1;
 }
 
-// 添加 fd
-void Epoll::addFd(int fd, uint32_t events) {
-    epoll_event event{};
-    //这里联合体data存放的数据就是客户端的fd
-    event.data.fd = fd;
-    event.events = events;
-    //ctl函数执行EPOLL_CTL_ADD操作，将fd添加到epoll实例中
-    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &event) == -1) {
-        throw std::runtime_error("Failed to add fd to epoll");
-    }
+// 删除事件
+bool EpollWrapper::removeFd(int fd) {
+    return epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr) != -1;
 }
 
-// 修改 fd
-void Epoll::modFd(int fd, uint32_t events) {
-    epoll_event event{};
-    event.data.fd = fd;
-    event.events = events;
-    if (epoll_ctl(epollFd, EPOLL_CTL_MOD, fd, &event) == -1) {
-        throw std::runtime_error("Failed to modify fd in epoll");
-    }
-}
-
-// 删除 fd
-void Epoll::delFd(int fd) {
-    if (epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
-        throw std::runtime_error("Failed to delete fd from epoll");
-    }
+// 修改事件
+bool EpollWrapper::modifyFd(int fd, uint32_t events) {
+    struct epoll_event ev{};
+    ev.data.fd = fd;
+    ev.events = events;
+    return epoll_ctl(epollFd, EPOLL_CTL_MOD, fd, &ev) != -1;
 }
 
 // 等待事件
-// timeoutMs为-1：阻塞等待，直到有事件发生, 为0：立即返回,  >0：等待指定时间
-std::vector<epoll_event> Epoll::wait(int timeoutMs) {
-    int numEvents = epoll_wait(epollFd, events.data(), events.size(), timeoutMs);
-    if (numEvents == -1) {
-        throw std::runtime_error("epoll_wait error: " + std::string(strerror(errno)));
-    }
-    return std::vector<epoll_event>(events.begin(), events.begin() + numEvents);
+int EpollWrapper::wait(int timeoutMs) {
+    return epoll_wait(epollFd, events.data(), events.size(), timeoutMs);
+}
+
+// 获取事件的 fd
+int EpollWrapper::getEventFd(int index) const {
+    return events[index].data.fd;
+}
+
+// 获取事件类型
+uint32_t EpollWrapper::getEventType(int index) const {
+    return events[index].events;
 }
